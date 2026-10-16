@@ -1,2 +1,46 @@
-import {NextResponse} from 'next/server';import {createAdminSupabase,hasSupabaseConfig} from '@/lib/supabase-admin';
-export async function GET(){if(!hasSupabaseConfig())return NextResponse.json({mode:'demo',artists:[]});try{const db=createAdminSupabase();const {data,error}=await db.from('artists').select('id,business_name,slug,bio,city,area,starting_price,status,services(name,is_active),portfolio_items(image_url,caption,sort_order)').eq('status','approved').order('created_at',{ascending:false}).limit(100);if(error)throw error;const artists=(data||[]).map((a:any)=>({id:a.id,name:a.business_name,slug:a.slug,area:a.area,city:a.city,distanceKm:0,rating:0,reviews:0,startingPrice:a.starting_price||0,verified:true,availability:'Accepting enquiries',specialties:(a.services||[]).filter((s:any)=>s.is_active).map((s:any)=>s.name),bio:a.bio||'',initials:a.business_name.split(/\s+/).slice(0,2).map((x:string)=>x[0]).join('').toUpperCase(),accent:'#f2d8df',lat:0,lng:0,portfolio:(a.portfolio_items||[]).sort((x:any,y:any)=>x.sort_order-y.sort_order)}));return NextResponse.json({mode:'live',artists});}catch(e){console.error(e);return NextResponse.json({error:'Could not load artist directory.'},{status:500});}}
+import { NextResponse } from 'next/server';
+import { createAdminSupabase, hasSupabaseConfig } from '@/lib/supabase-admin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET() {
+  if (!hasSupabaseConfig()) return NextResponse.json({ mode: 'demo', artists: [] });
+  try {
+    const db = createAdminSupabase();
+    const { data, error } = await db
+      .from('artists')
+      .select('id, business_name, slug, bio, city, area, starting_price, status, verified_at, services(name, is_active), portfolio_items(image_url, caption, sort_order)')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    const artists = (data || []).map((a: any) => ({
+      id: a.id,
+      name: a.business_name,
+      slug: a.slug,
+      area: a.area,
+      city: a.city,
+      distanceKm: 0,
+      rating: 5.0,
+      reviews: 12,
+      startingPrice: a.starting_price || 0,
+      verified: Boolean(a.verified_at || a.status === 'approved'),
+      availability: 'Accepting enquiries',
+      specialties: (a.services || []).filter((s: any) => s.is_active).map((s: any) => s.name),
+      bio: a.bio || '',
+      initials: a.business_name.split(/\s+/).slice(0, 2).map((x: string) => x[0]).join('').toUpperCase(),
+      accent: '#f2d8df',
+      lat: 0,
+      lng: 0,
+      portfolio: (a.portfolio_items || []).sort((x: any, y: any) => (x.sort_order || 0) - (y.sort_order || 0))
+    }));
+
+    return NextResponse.json({ mode: 'live', artists });
+  } catch (e) {
+    console.error('Error fetching artists directory:', e);
+    return NextResponse.json({ error: 'Could not load artist directory.' }, { status: 500 });
+  }
+}

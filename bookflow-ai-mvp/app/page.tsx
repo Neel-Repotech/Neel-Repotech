@@ -50,6 +50,7 @@ export default function Home() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [toast, setToast] = useState('');
   const [savedArtists, setSavedArtists] = useState<Record<string, boolean>>({});
+  const [submittedWhatsAppUrl, setSubmittedWhatsAppUrl] = useState('');
 
   // 1. Fetch live artists from directory
   useEffect(() => {
@@ -226,11 +227,14 @@ export default function Home() {
       const response = await fetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...lead, city: lead.area })
+        body: JSON.stringify({ ...lead, city: lead.area, artistId: selected })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not submit enquiry.');
       setToast(data.message || 'Enquiry submitted.');
+      if (data.whatsappUrl) {
+        setSubmittedWhatsAppUrl(data.whatsappUrl);
+      }
       setSubmitted(true);
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Could not submit enquiry.');
@@ -240,7 +244,9 @@ export default function Home() {
   function closeEnquiry() {
     setShowEnquiry(false);
     setSubmitted(false);
+    setSubmittedWhatsAppUrl('');
     setLead(emptyLead);
+    setSelected(null);
     setToast('');
   }
 
@@ -1207,7 +1213,34 @@ export default function Home() {
                 <span className="success-icon"><CheckCircle2 size={34} /></span>
                 <h2>Enquiry <em>submitted.</em></h2>
                 <p>{toast || 'Your request has been routed to available verified artists.'}</p>
-                <button className="btn btn-plum full-width" onClick={closeEnquiry} style={{ marginTop: '16px' }}>
+                {submittedWhatsAppUrl && (
+                  <div style={{ marginTop: '16px' }}>
+                    <a
+                      href={submittedWhatsAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn"
+                      style={{
+                        background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                        color: '#ffffff',
+                        padding: '12px 20px',
+                        borderRadius: '99px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        textDecoration: 'none',
+                        boxShadow: '0 6px 20px rgba(37, 211, 102, 0.35)',
+                        width: '100%',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <span>💬 Chat Directly on WhatsApp</span>
+                    </a>
+                  </div>
+                )}
+                <button className="btn btn-outline full-width" onClick={closeEnquiry} style={{ marginTop: '12px', width: '100%' }}>
                   Done
                 </button>
               </div>
