@@ -320,18 +320,20 @@ button {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 36px;
+  gap: 32px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-secondary);
 }
 
-.nav-links a {
+.nav-links > a:not(.btn) {
   position: relative;
   padding: 6px 0;
+  color: var(--ink-secondary);
+  transition: var(--transition-smooth);
 }
 
-.nav-links a::after {
+.nav-links > a:not(.btn)::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -343,12 +345,44 @@ button {
   border-radius: 2px;
 }
 
-.nav-links a:hover {
+.nav-links > a:not(.btn):hover {
   color: var(--plum);
 }
 
-.nav-links a:hover::after {
+.nav-links > a:not(.btn):hover::after {
   width: 100%;
+}
+
+.nav-links .btn {
+  padding: 9px 18px !important;
+  border-radius: 99px !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+.nav-links .btn::after {
+  display: none !important;
+}
+
+.nav-cta {
+  background: linear-gradient(135deg, #2b0819 0%, #43122b 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(43, 8, 25, 0.22);
+  padding: 10px 22px !important;
+  border-radius: 99px !important;
+}
+
+.nav-cta:hover {
+  background: linear-gradient(135deg, #18050e 0%, #300c1e 100%) !important;
+  box-shadow: 0 6px 18px rgba(43, 8, 25, 0.35);
+  transform: translateY(-2px);
+  color: #ffffff !important;
 }
 
 /* Glamour Luxury Buttons */

@@ -471,7 +471,8 @@ export default function Home() {
                 {t.navSignIn}
               </Link>
               <Link href="/join" className="btn btn-dark nav-cta" onClick={() => setMobileMenu(false)}>
-                {t.navListBusiness} <ArrowRight size={15} />
+                <span>{t.navListBusiness}</span>
+                <ArrowRight size={14} style={{ flexShrink: 0 }} />
               </Link>
             </div>
           )}
