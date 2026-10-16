@@ -30,7 +30,12 @@ export default function Home() {
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   const locationWrapperRef = useRef<HTMLDivElement>(null);
 
-  // Global Multilingual Support
+  // Top-Right Corner Location Dropdown
+  const [isTopLocationOpen, setIsTopLocationOpen] = useState(false);
+  const [topLocationQuery, setTopLocationQuery] = useState('');
+  const topLocationWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Global Multilingual Support (Default English, manual toggle only)
   const [currentLang, setCurrentLang] = useState<SupportedLanguage>('en');
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langWrapperRef = useRef<HTMLDivElement>(null);
@@ -101,6 +106,9 @@ export default function Home() {
       if (langWrapperRef.current && !langWrapperRef.current.contains(e.target as Node)) {
         setIsLangOpen(false);
       }
+      if (topLocationWrapperRef.current && !topLocationWrapperRef.current.contains(e.target as Node)) {
+        setIsTopLocationOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -111,25 +119,28 @@ export default function Home() {
     return searchWorldLocations(locationInput, 24);
   }, [locationInput]);
 
+  const topLocationSuggestions = useMemo(() => {
+    return searchWorldLocations(topLocationQuery, 24);
+  }, [topLocationQuery]);
+
   function handleSelectLocation(item: WorldLocationItem) {
     const isAll = item.name === 'Worldwide (All Locations)';
     setLocationInput(isAll ? '' : item.name);
     setSelectedLocation(isAll ? 'Worldwide' : item.name);
     setIsLocationOpen(false);
+    // Language remains English by default unless manually changed by user
+    setToast(isAll ? 'Showing all worldwide artists' : `📍 Location set to ${item.name}`);
+    document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' });
+  }
 
-    // Auto switch language based on chosen regional location
-    const autoLang = detectLanguageFromLocation(item.name);
-    if (autoLang !== currentLang) {
-      setCurrentLang(autoLang);
-      const langObj = supportedLanguages.find(l => l.code === autoLang);
-      setToast(
-        isAll
-          ? 'Showing all worldwide artists'
-          : `📍 ${item.name} • 🌐 Language set to ${langObj?.nativeName || autoLang}`
-      );
-    } else {
-      setToast(isAll ? 'Showing all worldwide artists' : `Location set to ${item.name}`);
-    }
+  function handleSelectTopLocation(item: WorldLocationItem) {
+    const isAll = item.name === 'Worldwide (All Locations)';
+    setLocationInput(isAll ? '' : item.name);
+    setSelectedLocation(isAll ? 'Worldwide' : item.name);
+    setIsTopLocationOpen(false);
+    setTopLocationQuery('');
+    setToast(isAll ? 'Showing all worldwide artists' : `📍 Location set to ${item.name}`);
+    document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' });
   }
 
   function handleSelectLanguage(code: SupportedLanguage) {
@@ -157,7 +168,7 @@ export default function Home() {
   // Filter with worldwide location dropdown support
   const { filtered, isShowingDestinationFallback } = useMemo(() => {
     const q = query.toLowerCase().trim();
-    const effectiveLoc = selectedLocation !== 'Worldwide' ? selectedLocation : locationInput.trim();
+    const effectiveLoc = selectedLocation !== 'Worldwide' ? selectedLocation : '';
 
     // 1. Direct location match
     let directMatches = liveArtists.filter(a => {
@@ -241,29 +252,110 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(aeoStructuredData) }}
       />
 
-      {/* Topline Announcement Bar with Global Location Selector */}
+      {/* Topline Announcement Bar with Working Global Location Dropdown */}
       <div className="topline">
-        <span>{t.topAnnouncement}</span>
-        <button
-          onClick={() => {
-            setIsLocationOpen(true);
-            document.getElementById('locationSearchInput')?.focus();
-          }}
-          className="topline-right"
-          style={{
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'transparent',
-            border: 0,
-            padding: 0
-          }}
-        >
-          <MapPin size={13} style={{ flexShrink: 0 }} />
-          <span>{selectedLocation === 'Worldwide' ? 'Global • All World' : selectedLocation.split(',')[0]}</span>
-          <ChevronDown size={13} style={{ flexShrink: 0 }} />
-        </button>
+        <span className="topline-text">{t.topAnnouncement}</span>
+        
+        {/* TOP RIGHT CORNER LOCATION DROPDOWN */}
+        <div className="topline-location-wrapper" ref={topLocationWrapperRef}>
+          <button
+            type="button"
+            onClick={() => setIsTopLocationOpen(!isTopLocationOpen)}
+            className="topline-right-btn"
+            aria-label="Select location worldwide"
+            title="Change country or city location"
+          >
+            <MapPin size={13} style={{ flexShrink: 0 }} />
+            <span>{selectedLocation === 'Worldwide' ? 'Global • All World' : selectedLocation.split(',')[0]}</span>
+            <ChevronDown
+              size={13}
+              style={{
+                transform: isTopLocationOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s ease',
+                flexShrink: 0
+              }}
+            />
+          </button>
+
+          {isTopLocationOpen && (
+            <div className="topline-dropdown-menu">
+              <div className="topline-dropdown-search">
+                <Search size={14} style={{ color: 'var(--plum)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  autoFocus
+                  value={topLocationQuery}
+                  onChange={e => setTopLocationQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      if (topLocationSuggestions.length > 0) {
+                        handleSelectTopLocation(topLocationSuggestions[0]);
+                      } else if (topLocationQuery.trim()) {
+                        handleSelectTopLocation({
+                          name: topLocationQuery.trim(),
+                          category: 'Destination',
+                          country: topLocationQuery.trim(),
+                          icon: '📍'
+                        });
+                      }
+                    }
+                  }}
+                  placeholder="Search city or country..."
+                />
+                {topLocationQuery && (
+                  <button type="button" onClick={() => setTopLocationQuery('')} className="topline-clear-btn">✕</button>
+                )}
+              </div>
+
+              <div className="topline-dropdown-list">
+                <button
+                  type="button"
+                  className={`topline-loc-item ${selectedLocation === 'Worldwide' ? 'active' : ''}`}
+                  onClick={() => handleSelectTopLocation({ name: 'Worldwide (All Locations)', category: 'Global', country: 'Worldwide', icon: '🌍' })}
+                >
+                  <span>🌍 Worldwide (All Locations)</span>
+                  <small>Global</small>
+                </button>
+
+                {topLocationSuggestions
+                  .filter(item => item.name !== 'Worldwide (All Locations)')
+                  .map(item => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      className={`topline-loc-item ${selectedLocation === item.name ? 'active' : ''}`}
+                      onClick={() => handleSelectTopLocation(item)}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>{item.icon}</span>
+                        <span>{item.name}</span>
+                      </span>
+                      <small>{item.category}</small>
+                    </button>
+                  ))}
+
+                {topLocationSuggestions.length === 0 && topLocationQuery.trim() && (
+                  <div style={{ padding: '14px 10px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: '11.5px', color: 'var(--muted)' }}>No standard hub for "{topLocationQuery}"</p>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => handleSelectTopLocation({
+                        name: topLocationQuery.trim(),
+                        category: 'Destination',
+                        country: topLocationQuery.trim(),
+                        icon: '📍'
+                      })}
+                      style={{ fontSize: '11px', padding: '6px 12px', width: '100%' }}
+                    >
+                      Search destination artists for "{topLocationQuery}" ✈️
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Header Sticky Navigation */}
@@ -420,17 +512,22 @@ export default function Home() {
                       onChange={e => {
                         const val = e.target.value;
                         setLocationInput(val);
-                        setSelectedLocation(val.trim() || 'Worldwide');
-                        // Auto-populate & open dropdown when user starts typing
-                        setIsLocationOpen(val.trim().length > 0);
+                        setIsLocationOpen(true);
                       }}
-                      onFocus={() => {
-                        // Open on focus only if user has already typed a query
-                        if (locationInput.trim().length > 0) {
-                          setIsLocationOpen(true);
+                      onFocus={() => setIsLocationOpen(true)}
+                      onClick={() => setIsLocationOpen(true)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          if (locationSuggestions.length > 0) {
+                            handleSelectLocation(locationSuggestions[0]);
+                          } else if (locationInput.trim()) {
+                            setSelectedLocation(locationInput.trim());
+                            setIsLocationOpen(false);
+                            document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' });
+                          }
                         }
                       }}
-                      placeholder={t.searchLocationPlaceholder}
+                      placeholder="City or country (e.g. Dubai, India)..."
                       style={{
                         border: 0,
                         outline: 0,
@@ -584,7 +681,16 @@ export default function Home() {
               </span>
             </label>
 
-            <button className="btn btn-plum search-btn" onClick={() => document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' })}>
+            <button
+              className="btn btn-plum search-btn"
+              onClick={() => {
+                if (locationInput.trim() && locationInput.trim() !== selectedLocation) {
+                  setSelectedLocation(locationInput.trim());
+                }
+                setIsLocationOpen(false);
+                document.getElementById('artists')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
               <Search size={16} /> {t.searchBtn}
             </button>
           </div>
@@ -806,7 +912,7 @@ export default function Home() {
                       <strong>{money(a.startingPrice)}</strong>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div className="artist-actions">
                       {a.slug && (
                         <Link
                           href={`/artists/${a.slug}`}
