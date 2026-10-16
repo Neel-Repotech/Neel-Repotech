@@ -59,6 +59,8 @@ export default function Home() {
       .then(data => {
         if (data?.mode === 'live' && Array.isArray(data.artists)) {
           setLiveArtists(data.artists);
+        } else if (Array.isArray(data)) {
+          setLiveArtists(data);
         }
       })
       .catch(() => {});

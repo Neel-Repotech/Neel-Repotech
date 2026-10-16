@@ -3,6 +3,9 @@ import { notFound } from 'next/navigation';
 import { createAdminSupabase, hasSupabaseConfig } from '@/lib/supabase-admin';
 import ArtistProfileView from './ArtistProfileView';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type Props = { params: { slug: string } };
 
 async function getArtist(slug: string) {
