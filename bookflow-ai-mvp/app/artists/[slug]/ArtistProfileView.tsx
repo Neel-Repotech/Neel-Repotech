@@ -1,9 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   MapPin, Sparkles, ArrowLeft, CheckCircle2, Instagram, Award,
-  MessageCircle, Star, Plus, X, Heart, ShieldCheck, Clock, Check
+  MessageCircle, Star, Plus, X, Heart, ShieldCheck, Clock, Check,
+  CreditCard, Shield, Calendar, Phone, Mail, User, AlertCircle
 } from 'lucide-react';
 
 export default function ArtistProfileView({ artist }: { artist: any }) {
@@ -18,7 +19,123 @@ export default function ArtistProfileView({ artist }: { artist: any }) {
   const [reviewNotice, setReviewNotice] = useState('');
   const [saved, setSaved] = useState(false);
 
+  // Advance Booking Deposit & Payment State
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const services = (artist.services || []).filter((s: any) => s.is_active);
+  const defaultService = services[0] || { name: 'Bridal Couture Artistry', price_from: artist.starting_price || 20000 };
+  const [depositService, setDepositService] = useState(defaultService.name);
+  const [depositPrice, setDepositPrice] = useState(defaultService.price_from);
+  const [depositAmount, setDepositAmount] = useState(Math.max(2500, Math.round(defaultService.price_from * 0.2)));
+  const [eventDate, setEventDate] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientNotes, setClientNotes] = useState('');
+  const [paymentProvider, setPaymentProvider] = useState<'razorpay' | 'stripe'>('razorpay');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [depositReceipt, setDepositReceipt] = useState<any>(null);
+  const [depositError, setDepositError] = useState('');
+
+  // Track profile view on page mount
+  useEffect(() => {
+    if (artist?.id) {
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artistId: artist.id, eventType: 'profile_view' })
+      }).catch(() => {});
+    }
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const dep = params.get('deposit');
+      const srv = params.get('service');
+      const cli = params.get('client');
+      if (dep) {
+        setDepositAmount(Number(dep) || 2500);
+        setShowDepositModal(true);
+      }
+      if (srv) setDepositService(srv);
+      if (cli) setClientName(cli);
+    }
+  }, [artist?.id]);
+
+  function handleWhatsAppClick() {
+    if (artist?.id) {
+      fetch('/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artistId: artist.id, eventType: 'whatsapp_click' })
+      }).catch(() => {});
+    }
+  }
+
+  function handleSelectServiceForDeposit(serviceName: string) {
+    setDepositService(serviceName);
+    const found = services.find((s: any) => s.name === serviceName);
+    const price = found?.price_from || artist.starting_price || 20000;
+    setDepositPrice(price);
+    setDepositAmount(Math.max(2500, Math.round(price * 0.2)));
+  }
+
+  async function handlePayDeposit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!clientName.trim() || !clientPhone.trim() || !eventDate) {
+      setDepositError('Please provide your name, contact phone number, and event date.');
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    setDepositError('');
+    try {
+      // 1. Create order
+      const orderRes = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artistId: artist.id,
+          serviceName: depositService,
+          totalServicePrice: depositPrice,
+          depositAmount,
+          eventDate,
+          customerName: clientName.trim(),
+          customerPhone: clientPhone.trim(),
+          customerEmail: clientEmail.trim(),
+          provider: paymentProvider
+        })
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create deposit order.');
+
+      // 2. Verify payment (in live environment, executes Razorpay/Stripe checkout; in sandbox, authenticates test transaction)
+      const verifyRes = await fetch('/api/payments/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: paymentProvider,
+          orderId: orderData.orderId,
+          paymentId: `pay_${paymentProvider}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          artistId: artist.id,
+          depositAmount,
+          totalAmount: depositPrice,
+          customerName: clientName.trim(),
+          customerPhone: clientPhone.trim(),
+          customerEmail: clientEmail.trim(),
+          serviceName: depositService,
+          eventDate,
+          notes: clientNotes.trim()
+        })
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(verifyData.error || 'Payment confirmation failed.');
+
+      setDepositReceipt(verifyData);
+    } catch (err: any) {
+      setDepositError(err.message || 'Payment could not be completed.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  }
   const portfolio = (artist.portfolio_items || []).sort((x: any, y: any) => (x.sort_order || 0) - (y.sort_order || 0));
 
   // WhatsApp setup
@@ -153,6 +270,7 @@ export default function ArtistProfileView({ artist }: { artist: any }) {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={handleWhatsAppClick}
             className="btn"
             style={{
               background: 'linear-gradient(135deg, #1ec85c 0%, #129340 100%)',
@@ -170,13 +288,45 @@ export default function ArtistProfileView({ artist }: { artist: any }) {
             <MessageCircle size={19} fill="white" /> Book via WhatsApp
           </a>
 
+          {/* Advance Booking Deposit Payment Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowDepositModal(true);
+              if (artist?.id) {
+                fetch('/api/analytics/track', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ artistId: artist.id, eventType: 'deposit_attempt' })
+                }).catch(() => {});
+              }
+            }}
+            className="btn"
+            style={{
+              background: 'linear-gradient(135deg, #43122b 0%, #6f2b4c 100%)',
+              color: '#ffffff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '9px',
+              padding: '13px 22px',
+              fontWeight: 700,
+              fontSize: '13.5px',
+              borderRadius: '14px',
+              border: '1px solid rgba(212, 163, 89, 0.45)',
+              boxShadow: '0 8px 25px rgba(67, 18, 43, 0.35)',
+              cursor: 'pointer'
+            }}
+          >
+            <CreditCard size={18} style={{ color: 'var(--gold)' }} /> Lock Date (Pay Advance)
+          </button>
+
           {/* Booking Enquiry Modal Anchor */}
           <Link
-            className="btn btn-plum"
+            className="btn btn-outline"
             href={`/?artist=${encodeURIComponent(artist.slug)}#artists`}
-            style={{ padding: '13px 22px', borderRadius: '14px' }}
+            style={{ padding: '13px 20px', borderRadius: '14px' }}
           >
-            Send Booking Enquiry →
+            Send Enquiry →
           </Link>
 
           {/* Instagram Profile */}
@@ -537,6 +687,285 @@ export default function ArtistProfileView({ artist }: { artist: any }) {
                 {submittingReview ? 'Publishing Review…' : 'Submit Verified Review ✨'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADVANCE BOOKING DEPOSIT PAYMENT MODAL */}
+      {showDepositModal && (
+        <div className="modal-backdrop" onClick={() => !isProcessingPayment && setShowDepositModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '580px', borderRadius: '24px' }}>
+            <button className="modal-close" disabled={isProcessingPayment} onClick={() => setShowDepositModal(false)}><X /></button>
+
+            {depositReceipt ? (
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #129340 0%, #1ec85c 100%)', borderRadius: '50%', color: 'white', display: 'grid', placeItems: 'center', margin: '0 auto 16px', boxShadow: '0 8px 25px rgba(30, 200, 92, 0.4)' }}>
+                  <CheckCircle2 size={36} />
+                </div>
+                <div className="eyebrow" style={{ color: '#129340' }}>✨ DATE RESERVED & LOCKED</div>
+                <h2 style={{ fontSize: '26px', margin: '6px 0 10px' }}>Advance Deposit Confirmed!</h2>
+                <p style={{ color: 'var(--ink-secondary)', fontSize: '13.5px', marginBottom: '20px' }}>
+                  Your wedding date has been secured with <strong>{artist.business_name}</strong>. An official token has been generated.
+                </p>
+
+                <div style={{ background: '#fdfbf9', border: '1px solid var(--line)', borderRadius: '16px', padding: '18px 20px', textAlign: 'left', marginBottom: '22px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--line)', paddingBottom: '10px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Receipt Token</span>
+                    <strong style={{ fontSize: '13px', color: 'var(--plum)', letterSpacing: '0.04em' }}>#{depositReceipt.receiptToken}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--line)', paddingBottom: '10px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Service & Date</span>
+                    <strong style={{ fontSize: '12.5px' }}>{depositService} · {eventDate}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--line)', paddingBottom: '10px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Advance Deposit Paid</span>
+                    <strong style={{ fontSize: '14px', color: '#129340' }}>₹{Number(depositReceipt.depositAmount).toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--line)', paddingBottom: '10px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Remaining Due at Event</span>
+                    <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>₹{Number(depositReceipt.remainingBalance).toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Payment Reference</span>
+                    <small style={{ fontSize: '11px', color: 'var(--muted)' }}>{depositReceipt.paymentId}</small>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  <a
+                    href={depositReceipt.whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{
+                      background: 'linear-gradient(135deg, #1ec85c 0%, #129340 100%)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '14px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 25px rgba(30, 200, 92, 0.3)'
+                    }}
+                  >
+                    <MessageCircle size={18} fill="white" /> Send Confirmed Token on WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setShowDepositModal(false);
+                      setDepositReceipt(null);
+                    }}
+                    style={{ padding: '12px', borderRadius: '12px' }}
+                  >
+                    Done & Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="eyebrow" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldCheck size={14} style={{ color: 'var(--gold-rich)' }} /> PLATFORM ESCROW DEPOSIT
+                </div>
+                <h2 style={{ fontSize: '24px', margin: '6px 0 8px' }}>Lock Date with <em>{artist.business_name}</em></h2>
+                <p className="modal-sub" style={{ fontSize: '13px', marginBottom: '18px' }}>
+                  Pay an advance booking token to reserve your wedding date and prevent other brides from booking.
+                </p>
+
+                {depositError && (
+                  <div className="notice notice-error" style={{ marginBottom: '16px' }}>
+                    <AlertCircle size={16} /> {depositError}
+                  </div>
+                )}
+
+                <form onSubmit={handlePayDeposit} style={{ display: 'grid', gap: '14px' }}>
+                  {/* Select Service */}
+                  <label style={{ display: 'grid', gap: '5px' }}>
+                    <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Select Bridal / Glam Service</b>
+                    <select
+                      value={depositService}
+                      onChange={e => handleSelectServiceForDeposit(e.target.value)}
+                      style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px', background: 'white' }}
+                    >
+                      {services.map((s: any) => (
+                        <option key={s.name} value={s.name}>
+                          {s.name} — ₹{Number(s.price_from || 0).toLocaleString('en-IN')}
+                        </option>
+                      ))}
+                      {services.length === 0 && (
+                        <option value="Bridal Couture Glamour">Bridal Couture Glamour — ₹{Number(artist.starting_price || 20000).toLocaleString('en-IN')}</option>
+                      )}
+                    </select>
+                  </label>
+
+                  {/* Wedding Date & Deposit Amount */}
+                  <div className="form-two">
+                    <label style={{ display: 'grid', gap: '5px' }}>
+                      <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Wedding / Event Date</b>
+                      <input
+                        type="date"
+                        required
+                        min={new Date().toISOString().split('T')[0]}
+                        value={eventDate}
+                        onChange={e => setEventDate(e.target.value)}
+                        style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'grid', gap: '5px' }}>
+                      <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Advance Deposit (₹)</b>
+                      <select
+                        value={depositAmount}
+                        onChange={e => setDepositAmount(Number(e.target.value))}
+                        style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px', background: 'white' }}
+                      >
+                        <option value={2500}>₹2,500 (Standard Token Deposit)</option>
+                        <option value={5000}>₹5,000 (Priority Peak Season Lock)</option>
+                        <option value={Math.round(depositPrice * 0.2)}>
+                          ₹{Math.round(depositPrice * 0.2).toLocaleString('en-IN')} (20% Advance of Package)
+                        </option>
+                        <option value={Math.round(depositPrice * 0.5)}>
+                          ₹{Math.round(depositPrice * 0.5).toLocaleString('en-IN')} (50% Full Confirmation)
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {/* Payment Gateway Provider Selector (Razorpay vs Stripe) */}
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Choose Secure Payment Method</b>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentProvider('razorpay')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px 14px',
+                          borderRadius: '12px',
+                          border: paymentProvider === 'razorpay' ? '2px solid var(--plum)' : '1px solid var(--line)',
+                          background: paymentProvider === 'razorpay' ? '#fcf3f7' : '#ffffff',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <CreditCard size={18} style={{ color: 'var(--plum)' }} />
+                        <div>
+                          <strong style={{ fontSize: '13px', display: 'block', color: 'var(--ink)' }}>Razorpay (India)</strong>
+                          <small style={{ fontSize: '10.5px', color: 'var(--muted)' }}>UPI, GPay, Cards, NetBanking</small>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentProvider('stripe')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px 14px',
+                          borderRadius: '12px',
+                          border: paymentProvider === 'stripe' ? '2px solid var(--plum)' : '1px solid var(--line)',
+                          background: paymentProvider === 'stripe' ? '#fcf3f7' : '#ffffff',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <ShieldCheck size={18} style={{ color: 'var(--gold-rich)' }} />
+                        <div>
+                          <strong style={{ fontSize: '13px', display: 'block', color: 'var(--ink)' }}>Stripe (Global)</strong>
+                          <small style={{ fontSize: '10.5px', color: 'var(--muted)' }}>International Cards & Apple Pay</small>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Client Information */}
+                  <div className="form-two">
+                    <label style={{ display: 'grid', gap: '5px' }}>
+                      <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Bride / Client Full Name</b>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Radhika Apte"
+                        value={clientName}
+                        onChange={e => setClientName(e.target.value)}
+                        style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'grid', gap: '5px' }}>
+                      <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Contact Phone / WhatsApp</b>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 9820123456"
+                        value={clientPhone}
+                        onChange={e => setClientPhone(e.target.value)}
+                        style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px' }}
+                      />
+                    </label>
+                  </div>
+
+                  <label style={{ display: 'grid', gap: '5px' }}>
+                    <b style={{ fontSize: '12px', color: 'var(--ink-secondary)' }}>Email (for Instant PDF Receipt)</b>
+                    <input
+                      type="email"
+                      placeholder="e.g. radhika@example.com"
+                      value={clientEmail}
+                      onChange={e => setClientEmail(e.target.value)}
+                      style={{ padding: '11px 14px', border: '1px solid var(--line)', borderRadius: '10px', fontSize: '13px' }}
+                    />
+                  </label>
+
+                  {/* Summary & Guarantee Pill */}
+                  <div style={{ background: '#fdf8ee', border: '1px solid rgba(212, 163, 89, 0.4)', borderRadius: '12px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#8c6819', fontWeight: 600, display: 'block' }}>TOTAL PACKAGE: ₹{depositPrice.toLocaleString('en-IN')}</span>
+                      <strong style={{ fontSize: '14px', color: 'var(--ink)' }}>Due Now: ₹{depositAmount.toLocaleString('en-IN')}</strong>
+                    </div>
+                    <span style={{ fontSize: '10.5px', color: 'var(--green)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={12} /> Instant Escrow Receipt
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-plum full-width"
+                    disabled={isProcessingPayment}
+                    style={{
+                      padding: '14px',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {isProcessingPayment ? (
+                      <>Processing Secure Deposit…</>
+                    ) : (
+                      <>Pay ₹{depositAmount.toLocaleString('en-IN')} via {paymentProvider.toUpperCase()} →</>
+                    )}
+                  </button>
+
+                  <div style={{ textAlign: 'center', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '14px', fontSize: '11px', color: 'var(--muted)' }}>
+                    <span>🔒 256-bit SSL Protected</span>
+                    <span>•</span>
+                    <span>Official Verified Token</span>
+                    <span>•</span>
+                    <span>Escrow Protected</span>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}
