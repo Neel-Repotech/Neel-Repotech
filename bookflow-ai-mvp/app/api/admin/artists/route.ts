@@ -43,11 +43,13 @@ export async function GET(req: NextRequest) {
 
       let instagram = '';
       let experience = '';
+      let whatsapp = '';
       if (a.address_public) {
         try {
           const parsed = JSON.parse(a.address_public);
           instagram = parsed.instagram || '';
           experience = parsed.experience || '';
+          whatsapp = parsed.whatsapp || '';
         } catch {
           if (a.address_public.includes('instagram.com') || a.address_public.startsWith('@')) {
             instagram = a.address_public;
@@ -59,6 +61,7 @@ export async function GET(req: NextRequest) {
         ...a,
         instagram,
         experience,
+        whatsapp,
         email: authUser?.email || '',
         full_name: prof?.full_name || '',
         phone: prof?.phone || '',
@@ -124,8 +127,8 @@ export async function PATCH(req: NextRequest) {
     if (typeof body.area === 'string' && body.area.trim()) updates.area = body.area.trim();
     if (body.starting_price !== undefined) updates.starting_price = Math.max(0, Number(body.starting_price) || 0);
 
-    // Instagram / Experience
-    if (body.instagram !== undefined || body.experience !== undefined) {
+    // Instagram / Experience / WhatsApp
+    if (body.instagram !== undefined || body.experience !== undefined || body.whatsapp !== undefined) {
       let meta: Record<string, any> = {};
       try {
         meta = artist.address_public ? JSON.parse(artist.address_public) : {};
@@ -134,6 +137,7 @@ export async function PATCH(req: NextRequest) {
       }
       if (body.instagram !== undefined) meta.instagram = String(body.instagram).trim();
       if (body.experience !== undefined) meta.experience = String(body.experience).trim();
+      if (body.whatsapp !== undefined) meta.whatsapp = String(body.whatsapp).trim().replace(/[^\d+]/g, '');
       updates.address_public = JSON.stringify(meta);
     }
 

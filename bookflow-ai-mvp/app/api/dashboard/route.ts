@@ -26,13 +26,18 @@ export async function GET(req: NextRequest) {
     // Parse address_public if it contains JSON metadata
     let instagram = '';
     let experience = '';
+    let whatsapp = '';
+    let before_after = null;
+    let reviews: any[] = [];
     if (artist.address_public) {
       try {
         const parsed = JSON.parse(artist.address_public);
         instagram = parsed.instagram || '';
         experience = parsed.experience || '';
+        whatsapp = parsed.whatsapp || '';
+        before_after = parsed.before_after || null;
+        reviews = Array.isArray(parsed.reviews) ? parsed.reviews : [];
       } catch {
-        // If it's a plain string
         if (artist.address_public.includes('instagram.com') || artist.address_public.startsWith('@')) {
           instagram = artist.address_public;
         }
@@ -54,6 +59,9 @@ export async function GET(req: NextRequest) {
         ...artist,
         instagram,
         experience,
+        whatsapp,
+        before_after,
+        reviews,
         portfolio_items: (artist.portfolio_items || []).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
       },
       offers: offers || [],
@@ -120,9 +128,11 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (body.instagram !== undefined || body.experience !== undefined) {
+    if (body.instagram !== undefined || body.experience !== undefined || body.whatsapp !== undefined || body.before_after !== undefined) {
       if (body.instagram !== undefined) currentMeta.instagram = String(body.instagram).trim();
       if (body.experience !== undefined) currentMeta.experience = String(body.experience).trim();
+      if (body.whatsapp !== undefined) currentMeta.whatsapp = String(body.whatsapp).trim().replace(/[^\d+]/g, '');
+      if (body.before_after !== undefined) currentMeta.before_after = body.before_after;
       updatePayload.address_public = JSON.stringify(currentMeta);
     }
 

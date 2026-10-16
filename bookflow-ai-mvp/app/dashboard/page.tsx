@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, LogOut, Sparkles, MapPin, Clock3, CheckCircle2,
   AlertCircle, RefreshCw, Instagram, Award, Image as ImageIcon,
-  Plus, Trash2, ExternalLink, ShieldCheck, DollarSign
+  Plus, Trash2, ExternalLink, ShieldCheck, DollarSign, MessageCircle
 } from 'lucide-react';
 import { createPublicSupabase } from '@/lib/supabase';
 
@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [startingPrice, setStartingPrice] = useState<number | string>(2500);
   const [instagram, setInstagram] = useState('');
   const [experience, setExperience] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [city, setCity] = useState('');
   const [area, setArea] = useState('');
 
@@ -67,6 +68,7 @@ export default function DashboardPage() {
       setStartingPrice(json.artist.starting_price || 0);
       setInstagram(json.artist.instagram || '');
       setExperience(json.artist.experience || '');
+      setWhatsapp(json.artist.whatsapp || '');
       setCity(json.artist.city || '');
       setArea(json.artist.area || '');
       setServicesList(json.artist.services || []);
@@ -103,6 +105,7 @@ export default function DashboardPage() {
           starting_price: Number(startingPrice),
           instagram,
           experience,
+          whatsapp,
           city,
           area
         })
@@ -518,6 +521,21 @@ export default function DashboardPage() {
                         placeholder="e.g. 5+ Years, Certified Bridal Artist"
                         value={experience}
                         onChange={e => setExperience(e.target.value)}
+                        style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: '8px' }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="form-two">
+                    <label style={{ display: 'grid', gap: '6px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MessageCircle size={15} style={{ color: '#25D366' }} /> <b>WhatsApp Number (For Direct Bookings)</b>
+                      </span>
+                      <input
+                        type="tel"
+                        placeholder="e.g. 9623463854 (with or without country code)"
+                        value={whatsapp}
+                        onChange={e => setWhatsapp(e.target.value)}
                         style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: '8px' }}
                       />
                     </label>
