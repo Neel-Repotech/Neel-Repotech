@@ -53,9 +53,33 @@ async function getArtist(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const artist = await getArtist(params.slug);
   if (!artist) return { title: 'Artist profile | BookFlow Beauty' };
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://neel-repotech.vercel.app';
+  const ogUrl = `${siteUrl}/api/og?title=${encodeURIComponent(artist.business_name)}&location=${encodeURIComponent(`${artist.area}, ${artist.city}`)}&price=${encodeURIComponent(`₹${(artist.starting_price || 0).toLocaleString('en-IN')}`)}&rating=5.0`;
+
   return {
     title: `${artist.business_name} | Makeup Artist in ${artist.area}, ${artist.city}`,
-    description: `Book ${artist.business_name} for bridal, engagement and party makeup in ${artist.area}, ${artist.city}. View portfolio photos, client reviews and chat on WhatsApp.`
+    description: `Book ${artist.business_name} for bridal, engagement and party makeup in ${artist.area}, ${artist.city}. View portfolio photos, client reviews and chat on WhatsApp.`,
+    openGraph: {
+      title: `${artist.business_name} • Verified Luxury Bridal Artist`,
+      description: `Book ${artist.business_name} for bridal, engagement, and destination wedding makeup in ${artist.area}, ${artist.city}. Compare real Before-and-After lookbooks and book via 1-Click WhatsApp.`,
+      url: `${siteUrl}/artists/${artist.slug}`,
+      siteName: 'BookFlow Beauty',
+      images: [
+        {
+          url: ogUrl,
+          width: 1200,
+          height: 630,
+          alt: `${artist.business_name} - Bridal Makeup Artist`
+        }
+      ]
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${artist.business_name} • Luxury Bridal Artist`,
+      description: `Book ${artist.business_name} in ${artist.area}, ${artist.city}. 1-Click WhatsApp Booking.`,
+      images: [ogUrl]
+    }
   };
 }
 
