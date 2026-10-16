@@ -1,5 +1,67 @@
-import type {Metadata} from 'next';import Link from 'next/link';import {notFound} from 'next/navigation';import {MapPin,Sparkles,ArrowLeft,CheckCircle2} from 'lucide-react';import {createAdminSupabase,hasSupabaseConfig} from '@/lib/supabase-admin';
-type Props={params:{slug:string}};
-async function getArtist(slug:string){if(!hasSupabaseConfig())return null;const db=createAdminSupabase();const {data,error}=await db.from('artists').select('id,business_name,slug,bio,city,area,starting_price,status,services(name,description,price_from,duration_minutes,is_active),portfolio_items(image_url,caption,sort_order)').eq('slug',slug).eq('status','approved').maybeSingle();if(error)throw error;return data;}
-export async function generateMetadata({params}:Props):Promise<Metadata>{const artist=await getArtist(params.slug);if(!artist)return {title:'Artist profile | BookFlow Beauty'};return {title:`${artist.business_name} | Makeup Artist in ${artist.area}, ${artist.city}`,description:`Explore makeup services and starting prices from ${artist.business_name} in ${artist.area}, ${artist.city}. Send a booking enquiry through BookFlow Beauty.`};}
-export default async function ArtistProfile({params}:Props){const a=await getArtist(params.slug);if(!a)notFound();const services=(a.services||[]).filter((s:any)=>s.is_active);const portfolio=(a.portfolio_items||[]).sort((x:any,y:any)=>x.sort_order-y.sort_order);return <main className="profile-page"><header className="dashboard-nav"><Link href="/" className="brand"><span className="brand-mark"><Sparkles size={20}/></span><span>bookflow<span className="brand-ai">.beauty</span><small>BEAUTY BOOKINGS, SIMPLIFIED</small></span></Link><Link href="/" className="back-link"><ArrowLeft size={15}/> Browse artists</Link></header><section className="profile-hero"><div className="eyebrow"><CheckCircle2 size={14}/> APPROVED ARTIST PROFILE</div><h1>{a.business_name}</h1><p className="profile-location"><MapPin size={17}/>{a.area}, {a.city}</p><p className="profile-bio">{a.bio||'Contact this artist to learn more about their style, services and availability.'}</p><div className="profile-price">Starting from <strong>₹{Number(a.starting_price||0).toLocaleString('en-IN')}</strong></div><Link className="btn btn-plum" href={`/?artist=${encodeURIComponent(a.slug)}#artists`}>Browse directory and send an enquiry →</Link></section><section className="profile-content"><div className="panel-heading"><div><h2>Services & starting prices</h2><p>Confirm the final price and availability directly with the artist.</p></div></div>{services.length?<div className="profile-service-grid">{services.map((s:any)=><article className="profile-service" key={s.name}><span className="service-symbol"><Sparkles size={17}/></span><h3>{s.name}</h3><p>{s.description||'Available by enquiry. Contact the artist for details and date confirmation.'}</p><strong>From ₹{Number(s.price_from||0).toLocaleString('en-IN')}</strong>{s.duration_minutes&&<small>{s.duration_minutes} minutes</small>}</article>)}</div>:<p>Contact the artist for service details.</p>}{portfolio.length>0&&<><h2 className="portfolio-heading">Portfolio</h2><div className="profile-portfolio">{portfolio.map((p:any)=><figure key={p.image_url}><img src={p.image_url} alt={p.caption||`${a.business_name} makeup portfolio`} loading="lazy"/><figcaption>{p.caption}</figcaption></figure>)}</div></>}</section><footer className="profile-footer">Prices and availability may change. BookFlow Beauty does not guarantee the quality or availability of independent artists. <Link href="/">Return to directory</Link>.</footer></main>}
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { createAdminSupabase, hasSupabaseConfig } from '@/lib/supabase-admin';
+import ArtistProfileView from './ArtistProfileView';
+
+type Props = { params: { slug: string } };
+
+async function getArtist(slug: string) {
+  if (!hasSupabaseConfig()) return null;
+  const db = createAdminSupabase();
+  const { data, error } = await db
+    .from('artists')
+    .select('id, business_name, slug, bio, city, area, starting_price, status, address_public, services(id, name, description, price_from, duration_minutes, is_active), portfolio_items(id, image_url, caption, sort_order)')
+    .eq('slug', slug)
+    .eq('status', 'approved')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  // Extract metadata
+  let instagram = '';
+  let experience = '';
+  let whatsapp = '';
+  let before_after = null;
+  let reviews: any[] = [];
+
+  if (data.address_public) {
+    try {
+      const meta = JSON.parse(data.address_public);
+      instagram = meta.instagram || '';
+      experience = meta.experience || '';
+      whatsapp = meta.whatsapp || '';
+      before_after = meta.before_after || null;
+      reviews = Array.isArray(meta.reviews) ? meta.reviews : [];
+    } catch {
+      if (data.address_public.includes('instagram.com') || data.address_public.startsWith('@')) {
+        instagram = data.address_public;
+      }
+    }
+  }
+
+  return {
+    ...data,
+    instagram,
+    experience,
+    whatsapp,
+    before_after,
+    reviews
+  };
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const artist = await getArtist(params.slug);
+  if (!artist) return { title: 'Artist profile | BookFlow Beauty' };
+  return {
+    title: `${artist.business_name} | Makeup Artist in ${artist.area}, ${artist.city}`,
+    description: `Book ${artist.business_name} for bridal, engagement and party makeup in ${artist.area}, ${artist.city}. View portfolio photos, client reviews and chat on WhatsApp.`
+  };
+}
+
+export default async function ArtistProfilePage({ params }: Props) {
+  const artist = await getArtist(params.slug);
+  if (!artist) notFound();
+
+  return <ArtistProfileView artist={artist} />;
+}
